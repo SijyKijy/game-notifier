@@ -17,6 +17,7 @@ githubApi = Github(GH_TOKEN)
 
 def ConvertPageToGame(game):
     elements = game.select('div.header-h1 > a, div.short-story > div.maincont > div, div.short-story > div.maincont > div > p > a')
+    comment = game.select('span[style]')
     
     if(not elements):
         return None
@@ -25,17 +26,20 @@ def ConvertPageToGame(game):
         'Id': elements[1].get('id')[8:], # Example: 'news-id-5189'
         'Title': elements[0].get_text(strip=True),
         'Url': elements[0].get('href'),
-        'PhotoUrl': elements[2].get('href') if 2 < len(elements) else None
+        'PhotoUrl': elements[2].get('href') if 2 < len(elements) else None,
+        'Comment': comment[0].get_text(strip=True) if len(comment) > 0 else None
     }
 
 def ConvertGameToEmbed(game):
     title = game['Title']
     url = game['Url']
     photoUrl = game['PhotoUrl']
+    comment = game['Comment']
     return {
         'title': f'**{title}**',
         'url': url,
-        'thumbnail': {
+        'description': comment,
+        'image': {
             'url': photoUrl
         },
         'color': random.randint(1, 16777215)
