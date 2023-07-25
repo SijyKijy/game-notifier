@@ -72,8 +72,11 @@ def GetLastId():
 
 def SaveId(newId):
     print('Save new id')
-    gist = githubApi.get_gist(GIST_ID)
-    gist.edit(newId)
+    try:
+        gist = githubApi.get_gist(GIST_ID)
+        gist.edit(newId)
+    except:
+        print(f'Error saving id (NewId: {newId})')
 
 def Notify(games):
     print('Notify')
