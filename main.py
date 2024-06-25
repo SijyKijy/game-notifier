@@ -94,7 +94,8 @@ def Start():
     lastId = GetLastId()
     games = GetGames()
     if(not games):
-        raise Exception('No games found')
+        print('Games not found')
+        return
 
     newId = games[0]['Id']
     if (lastId == newId):
