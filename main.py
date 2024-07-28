@@ -38,9 +38,13 @@ def GetPerpDescription(gameName):
         "content-type": "application/json",
         "authorization": f'Bearer {PERP_TOKEN}'
     }
-    
-    response = requests.post(url, json=payload, headers=headers)
-    return response.text
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        return response.text
+    except:
+        print(f'[Perp] Error when get game desc (GameName: \'{gameName}\')')
+        return "¯\_(ツ)_/¯"
 
 def ConvertPageToGame(game):
     elements = game.select('div.header-h1 > a, div.short-story > div.maincont > div, div.short-story > div.maincont > div > p > a')
