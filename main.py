@@ -41,10 +41,12 @@ def GetPerpDescription(gameName):
 
     try:
         response = requests.post(url, json=payload, headers=headers)
-        print(f'[{gameName}] Resp: {response.text}')
+        if response.status_code != 200:
+            print(f'[GetPerpDescription] Name: \'{gameName}\' Resp: \'{response.text}\'')
+            raise Exception('Error when get perp description')
         return response.text
     except:
-        print(f'[Perp] Error when get game desc (GameName: \'{gameName}\')')
+        print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\')')
         return "¯\_(ツ)_/¯"
 
 def ConvertPageToGame(game):
@@ -111,19 +113,23 @@ def SaveId(newId):
     except:
         print(f'Error saving id (NewId: {newId})')
 
-def Notify(games):
-    print('Notify')
-    embeds = list(map(ConvertGameToEmbed, games))
+def Notify(game):
+    print(f'[Notify] Notify Title: {game['Title']}')
+    embed = ConvertGameToEmbed(game)
     webhookContent = {
         'username': 'FreeTP Notifier',
         'avatar_url': 'https://freetp.org/templates/freetp2/bullet_energy/images/noavatar.png',
         'content': 'Новенькие руководства:',
-        'embeds': embeds
+        'embeds': embed
     }
 
-    print(f'[Notify] Req: {webhookContent}')
     response = requests.post(f'https://discord.com/api/webhooks/{WEBHOOK_PATH}', json = webhookContent)
-    print(f'[Notify] Resp: {response.text}')
+    if response.status_code != 200:
+        print(f'[Notify] Req: {webhookContent}')
+        print(f'[Notify] Resp: {response.text}')
+        raise Exception('Error when notify game')
+
+    print('[Notify] Done')
 
 def Start():
     lastId = GetLastId()
@@ -140,8 +146,13 @@ def Start():
     print('Games founded')
     newGames = GetNewGames(games, lastId)
     print(f'New games founded (Count: {len(newGames)})')
-    
-    Notify(newGames)
+
+    for game in newGames:
+        try:
+            Notify(game)
+        except Exception as e:
+            print(f"Error when notify: {str(e)}")
+
     SaveId(newId)
     
 if __name__ == "__main__":
