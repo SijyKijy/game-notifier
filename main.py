@@ -114,7 +114,8 @@ def SaveId(newId):
         print(f'Error saving id (NewId: {newId})')
 
 def Notify(game):
-    print(f'[Notify] Notify Title: {game['Title']}')
+    gameTitle = game['Title']
+    print(f'[Notify] Notify Title: {gameTitle}')
     embed = ConvertGameToEmbed(game)
     webhookContent = {
         'username': 'FreeTP Notifier',
