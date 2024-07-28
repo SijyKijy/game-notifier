@@ -9,11 +9,38 @@ try:
     GIST_ID = os.environ["GIST_ID"]
     GH_TOKEN = os.environ["GH_TOKEN"]
     WEBHOOK_PATH = os.environ["WEBHOOK_PATH"]
+    PERP_TOKEN = os.environ["PERP_TOKEN"]
+    PERP_MODEL = os.environ["PERP_MODEL"]
+    PERP_PROMPT = os.environ["PERP_PROMPT"]
 except KeyError:
     print('Error when getting variables')
     raise
 
 githubApi = Github(GH_TOKEN)
+
+def GetPerpDescription(gameName):
+    url = "https://api.perplexity.ai/chat/completions"
+    payload = {
+        "model": PERP_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": PERP_PROMPT
+            },
+            {
+                "role": "user",
+                "content": gameName
+            }
+        ]
+    }
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "authorization": f'Bearer {PERP_TOKEN}'
+    }
+    
+    response = requests.post(url, json=payload, headers=headers)
+    return response.text
 
 def ConvertPageToGame(game):
     elements = game.select('div.header-h1 > a, div.short-story > div.maincont > div, div.short-story > div.maincont > div > p > a')
@@ -35,10 +62,11 @@ def ConvertGameToEmbed(game):
     url = game['Url']
     photoUrl = game['PhotoUrl']
     comment = game['Comment']
+    desc = GetPerpDescription(title)
     return {
         'title': f'**{title}**',
         'url': url,
-        'description': comment,
+        'description': f'{comment}\n---\n{desc}',
         'image': {
             'url': photoUrl
         },
