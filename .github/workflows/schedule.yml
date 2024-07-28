@@ -27,4 +27,7 @@ jobs:
                 GIST_ID: ${{ secrets.GIST_ID }}
                 GH_TOKEN: ${{ secrets.GH_TOKEN }}
                 WEBHOOK_PATH: ${{ secrets.WEBHOOK_PATH }}
+                PERP_TOKEN: ${{ secrets.PERP_TOKEN }}
+                PERP_MODEL: ${{ secrets.PERP_MODEL }}
+                PERP_PROMPT: ${{ env.PERP_PROMPT }}
               run: python main.py
