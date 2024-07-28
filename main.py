@@ -116,12 +116,12 @@ def SaveId(newId):
 def Notify(game):
     gameTitle = game['Title']
     print(f'[Notify] Notify Title: {gameTitle}')
-    embeds = list(ConvertGameToEmbed(game))
+    embed = ConvertGameToEmbed(game)
     webhookContent = {
         'username': 'FreeTP Notifier',
         'avatar_url': 'https://freetp.org/templates/freetp2/bullet_energy/images/noavatar.png',
         'content': 'Новенькие руководства:',
-        'embeds': embeds
+        'embeds': [embed]
     }
 
     response = requests.post(f'https://discord.com/api/webhooks/{WEBHOOK_PATH}', json = webhookContent)
