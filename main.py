@@ -127,10 +127,9 @@ def Notify(game):
     }
 
     response = requests.post(f'https://discord.com/api/webhooks/{WEBHOOK_PATH}', json = webhookContent)
-    if response.status_code != 200:
+    if response.status_code > 300:
         print(f'[Notify] Req: {webhookContent}')
         print(f'[Notify] [{response.status_code}] Resp: {response.text}')
-        print(f'[Notify] Resp2: {response}')
         raise Exception('Error when notify game')
 
     print('[Notify] Done')
