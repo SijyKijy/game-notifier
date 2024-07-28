@@ -2,3 +2,4 @@ requests==2.31.0
 beautifulsoup4==4.11.1
 cloudscraper==1.2.64
 PyGithub==1.59
+python-dotenv==1.0.0

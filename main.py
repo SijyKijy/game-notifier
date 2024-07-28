@@ -4,6 +4,9 @@ import os
 from bs4 import BeautifulSoup
 import cloudscraper
 from github import Github
+from dotenv import load_dotenv
+
+load_dotenv()
 
 try:
     GIST_ID = os.environ["GIST_ID"]
@@ -12,6 +15,9 @@ try:
     PERP_TOKEN = os.environ["PERP_TOKEN"]
     PERP_MODEL = os.environ["PERP_MODEL"]
     PERP_PROMPT = os.environ["PERP_PROMPT"]
+    
+    if not all([GIST_ID, GH_TOKEN, WEBHOOK_PATH, PERP_TOKEN, PERP_MODEL, PERP_PROMPT]):
+        raise KeyError("One or more environment variables are missing")
 except KeyError:
     print('Error when getting variables')
     raise
