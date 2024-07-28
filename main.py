@@ -41,6 +41,7 @@ def GetPerpDescription(gameName):
 
     try:
         response = requests.post(url, json=payload, headers=headers)
+        print(f'[{gameName}] Resp: {response.text}')
         return response.text
     except:
         print(f'[Perp] Error when get game desc (GameName: \'{gameName}\')')
@@ -120,7 +121,8 @@ def Notify(games):
         'embeds': embeds
     }
 
-    requests.post(f'https://discord.com/api/webhooks/{WEBHOOK_PATH}', json = webhookContent)
+    response = requests.post(f'https://discord.com/api/webhooks/{WEBHOOK_PATH}', json = webhookContent)
+    print(f'[{Notify}] Resp: {response}')
 
 def Start():
     lastId = GetLastId()
