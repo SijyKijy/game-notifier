@@ -41,10 +41,12 @@ def GetPerpDescription(gameName):
 
     try:
         response = requests.post(url, json=payload, headers=headers)
+        response.encoding = 'utf-8'
+        data = response.json()
         if response.status_code != 200:
-            print(f'[GetPerpDescription] Name: \'{gameName}\' Resp: \'{response.text}\'')
+            print(f'[GetPerpDescription] Name: \'{gameName}\' Resp: \'{data}\'')
             raise Exception('Error when get perp description')
-        return response.text
+        return data.choices[0].message.content
     except:
         print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\')')
         return "¯\_(ツ)_/¯"
