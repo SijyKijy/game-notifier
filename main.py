@@ -121,8 +121,9 @@ def Notify(games):
         'embeds': embeds
     }
 
+    print(f'[Notify] Req: {webhookContent}')
     response = requests.post(f'https://discord.com/api/webhooks/{WEBHOOK_PATH}', json = webhookContent)
-    print(f'[{Notify}] Resp: {response}')
+    print(f'[Notify] Resp: {response.text}')
 
 def Start():
     lastId = GetLastId()
