@@ -46,7 +46,7 @@ def GetPerpDescription(gameName):
         if response.status_code != 200:
             print(f'[GetPerpDescription] Name: \'{gameName}\' Resp: \'{data}\'')
             raise Exception('Error when get perp description')
-        return data.choices[0].message.content
+        return data['choices'][0]['message']['content']
     except Exception as e:
         print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
         return "¯\_(ツ)_/¯"
