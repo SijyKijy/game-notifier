@@ -5,24 +5,28 @@ from bs4 import BeautifulSoup
 import cloudscraper
 from github import Github
 from dotenv import load_dotenv
+import asyncio
+import json
+import aiohttp
 
 load_dotenv()
 
 try:
     GIST_ID = os.environ["GIST_ID"]
     GH_TOKEN = os.environ["GH_TOKEN"]
-    WEBHOOK_PATH = os.environ["WEBHOOK_PATH"]
+    WEBHOOKS_PATH = os.environ["WEBHOOKS_PATH"]
     PERP_TOKEN = os.environ["PERP_TOKEN"]
     PERP_MODEL = os.environ["PERP_MODEL"]
     PERP_PROMPT = os.environ["PERP_PROMPT"]
-    
-    if not all([GIST_ID, GH_TOKEN, WEBHOOK_PATH, PERP_TOKEN, PERP_MODEL, PERP_PROMPT]):
+
+    if not all([GIST_ID, GH_TOKEN, WEBHOOKS_PATH, PERP_TOKEN, PERP_MODEL, PERP_PROMPT]):
         raise KeyError("One or more environment variables are missing")
 except KeyError:
     print('Error when getting variables')
     raise
 
 githubApi = Github(GH_TOKEN)
+webhook_urls = json.loads(WEBHOOKS_PATH)
 
 def GetPerpDescription(gameName):
     url = "https://api.perplexity.ai/chat/completions"
@@ -52,7 +56,7 @@ def GetPerpDescription(gameName):
         if response.status_code != 200:
             print(f'[GetPerpDescription] Name: \'{gameName}\' Resp: \'{data}\'')
             raise Exception('Error when get perp description')
-        return data['choices'][0]['message']['content']
+        return data['choices'][0]['message']['content'].strip('"')
     except Exception as e:
         print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
         return "¯\_(ツ)_/¯"
@@ -60,15 +64,15 @@ def GetPerpDescription(gameName):
 def ConvertPageToGame(game):
     elements = game.select('div.header-h1 > a, div.short-story > div.maincont > div, div.short-story > div.maincont > div > p > a')
     comment = game.select('span[style]')
-    
-    if(not elements):
+
+    if not elements:
         return None
-    
+
     return {
-        'Id': elements[1].get('id')[8:], # Example: 'news-id-5189'
+        'Id': elements[1].get('id')[8:],  # Example: 'news-id-5189'
         'Title': elements[0].get_text(strip=True),
         'Url': elements[0].get('href'),
-        'PhotoUrl': elements[2].get('href') if 2 < len(elements) else None,
+        'PhotoUrl': elements[2].get('href') if len(elements) > 2 else None,
         'Comment': comment[0].get_text(strip=True) if len(comment) > 0 else None
     }
 
@@ -99,7 +103,7 @@ def GetPage():
 def GetGames():
     print('Get games')
     page = GetPage()
-    soup = BeautifulSoup(page,'html.parser')
+    soup = BeautifulSoup(page, 'html.parser')
     elements = soup.select('#dle-content > div.base')
     return list(filter(lambda g: g, map(ConvertPageToGame, elements)))
 
@@ -121,7 +125,7 @@ def SaveId(newId):
     except:
         print(f'Error saving id (NewId: {newId})')
 
-def Notify(game):
+async def Notify(game):
     gameTitle = game['Title']
     print(f'[Notify] Notify Title: {gameTitle}')
     embed = ConvertGameToEmbed(game)
@@ -131,24 +135,34 @@ def Notify(game):
         'content': 'Новенькие руководства:',
         'embeds': [embed]
     }
+    
+    async def send_webhook(url, webhookContent):
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=webhookContent) as response:
+                if response.status > 300:
+                    print(f'[Notify] Req: {webhookContent}')
+                    print(f'[Notify] [{response.status}] Resp: {await response.text()}')
+                    raise Exception('Error when notify game')
 
-    response = requests.post(f'https://discord.com/api/webhooks/{WEBHOOK_PATH}', json = webhookContent)
-    if response.status_code > 300:
-        print(f'[Notify] Req: {webhookContent}')
-        print(f'[Notify] [{response.status_code}] Resp: {response.text}')
-        raise Exception('Error when notify game')
+    async def notify_games(webhook_urls, webhookContent):
+        tasks = []
+        for url in webhook_urls:
+            task = asyncio.create_task(send_webhook(url, webhookContent))
+            tasks.append(task)
+        await asyncio.gather(*tasks)
 
+    await notify_games(webhook_urls, webhookContent)
     print('[Notify] Done')
 
 def Start():
     lastId = GetLastId()
     games = GetGames()
-    if(not games):
+    if not games:
         print('Games not found')
         return
 
     newId = games[0]['Id']
-    if (lastId == newId):
+    if lastId == newId:
         print('New games not found')
         return
 
@@ -156,13 +170,16 @@ def Start():
     newGames = GetNewGames(games, lastId)
     print(f'New games founded (Count: {len(newGames)})')
 
-    for game in newGames:
-        try:
-            Notify(game)
-        except Exception as e:
-            print(f"Error when notify: {str(e)}")
+    async def notify_games_async(newGames):
+        tasks = []
+        for game in newGames:
+            task = asyncio.create_task(Notify(game))
+            tasks.append(task)
+        await asyncio.gather(*tasks)
+
+    asyncio.run(notify_games_async(newGames))
 
     SaveId(newId)
-    
+
 if __name__ == "__main__":
     Start()

@@ -3,8 +3,7 @@ name: games-notifier
 on:
     schedule:
         - cron: "0 * * * *" # hourly
-    push:
-        branches: main
+    workflow_dispatch: # allows manual triggering
 jobs:
     build:
         runs-on: ubuntu-latest
@@ -26,7 +25,7 @@ jobs:
               env:
                 GIST_ID: ${{ secrets.GIST_ID }}
                 GH_TOKEN: ${{ secrets.GH_TOKEN }}
-                WEBHOOK_PATH: ${{ secrets.WEBHOOK_PATH }}
+                WEBHOOKS_PATH: ${{ secrets.WEBHOOKS_PATH }}
                 PERP_TOKEN: ${{ secrets.PERP_TOKEN }}
                 PERP_MODEL: ${{ secrets.PERP_MODEL }}
                 PERP_PROMPT: ${{ vars.PERP_PROMPT }}
