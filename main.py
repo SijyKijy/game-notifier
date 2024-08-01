@@ -176,6 +176,7 @@ def Start():
 
     print('Games founded')
     newGames = GetNewGames(games, lastId)
+    newGames.reverse()
     print(f'New games founded (Count: {len(newGames)})')
 
     async def notify_games_async(newGames):
