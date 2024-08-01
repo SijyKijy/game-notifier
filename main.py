@@ -179,11 +179,8 @@ def Start():
     print(f'New games founded (Count: {len(newGames)})')
 
     async def notify_games_async(newGames):
-        tasks = []
         for game in newGames:
-            task = asyncio.create_task(Notify(game))
-            tasks.append(task)
-        await asyncio.gather(*tasks)
+            await Notify(game)
 
     asyncio.run(notify_games_async(newGames))
 
