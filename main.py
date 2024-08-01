@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import asyncio
 import json
 import aiohttp
+import time
 
 load_dotenv()
 
@@ -138,11 +139,18 @@ async def Notify(game):
     
     async def send_webhook(url, webhookContent):
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=webhookContent) as response:
-                if response.status > 300:
-                    print(f'[Notify] Req: {webhookContent}')
-                    print(f'[Notify] [{response.status}] Resp: {await response.text()}')
-                    raise Exception('Error when notify game')
+            while True:
+                async with session.post(url, json=webhookContent) as response:
+                    if response.status == 429:
+                        retry_after = float(response.headers.get('Retry-After', 1))
+                        print(f'[Notify] Rate limited. Retrying after {retry_after} seconds.')
+                        await asyncio.sleep(retry_after)
+                    elif response.status > 300:
+                        print(f'[Notify] Req: {webhookContent}')
+                        print(f'[Notify] [{response.status}] Resp: {await response.text()}')
+                        raise Exception('Error when notify game')
+                    else:
+                        break
 
     async def notify_games(webhook_urls, webhookContent):
         tasks = []
