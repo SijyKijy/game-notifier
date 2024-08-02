@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import asyncio
 import json
 import aiohttp
-import time
+from urllib.parse import urlparse
 
 load_dotenv()
 
@@ -28,6 +28,13 @@ except KeyError:
 
 githubApi = Github(GH_TOKEN)
 webhook_urls = json.loads(WEBHOOKS_PATH)
+
+def IsUrl(url):
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except ValueError:
+        return False
 
 def GetPerpDescription(gameName):
     url = "https://api.perplexity.ai/chat/completions"
@@ -65,6 +72,7 @@ def GetPerpDescription(gameName):
 def ConvertPageToGame(game):
     elements = game.select('div.header-h1 > a, div.short-story > div.maincont > div, div.short-story > div.maincont > div > p > a')
     comment = game.select('span[style]')
+    photoUrl = elements[2].get('href') if len(elements) > 2 and IsUrl(elements[2].get('href')) else None
 
     if not elements:
         return None
@@ -73,7 +81,7 @@ def ConvertPageToGame(game):
         'Id': elements[1].get('id')[8:],  # Example: 'news-id-5189'
         'Title': elements[0].get_text(strip=True),
         'Url': elements[0].get('href'),
-        'PhotoUrl': elements[2].get('href') if len(elements) > 2 else None,
+        'PhotoUrl': photoUrl,
         'Comment': comment[0].get_text(strip=True) if len(comment) > 0 else None
     }
 
@@ -83,15 +91,20 @@ def ConvertGameToEmbed(game):
     photoUrl = game['PhotoUrl']
     comment = game['Comment']
     desc = GetPerpDescription(title)
-    return {
+    
+    resultEmbed = {
         'title': f'**{title}**',
         'url': url,
         'description': f'{comment}\n---\n{desc}',
-        'image': {
-            'url': photoUrl
-        },
         'color': random.randint(1, 16777215)
     }
+
+    if photoUrl:
+        resultEmbed['image'] = {
+            'url': photoUrl
+        }
+
+    return resultEmbed
 
 def GetPage():
     print('Get page')
