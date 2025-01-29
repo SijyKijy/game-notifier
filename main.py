@@ -189,7 +189,8 @@ def Start():
     if not games:
         print('Games not found')
         return
-
+    
+    print(f'Game IDs: {", ".join(str(game["Id"]) for game in games)}')
     newId = games[0]['Id']
     if lastId == newId:
         print('New games not found')
