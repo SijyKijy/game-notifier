@@ -30,6 +30,10 @@ except KeyError:
 githubApi = Github(GH_TOKEN)
 webhook_urls = json.loads(WEBHOOKS_PATH)
 
+excluded_ids = [
+    5592 # Squad
+    ]
+
 def IsUrl(url):
     try:
         result = urlparse(url)
@@ -181,6 +185,7 @@ async def Notify(game):
 def Start():
     lastId = GetLastId()
     games = GetGames()
+    games = [game for game in games if game['Id'] not in excluded_ids]
     if not games:
         print('Games not found')
         return
