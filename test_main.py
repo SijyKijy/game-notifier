@@ -18,6 +18,19 @@ class TestMain(unittest.TestCase):
         result = main.GetPerpDescription('Test Game')
         self.assertEqual(result, "¯\_(ツ)_/¯")
 
+    @patch('main.requests.post')
+    def test_GetPerpDescription_with_think_block(self, mock_post):
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {
+            'choices': [{
+                'message': {
+                    'content': '<think>Some reasoning</think>\nActual Description without think block.'
+                }
+            }]
+        }
+        result = main.GetPerpDescription('Test Game with Think')
+        self.assertEqual(result, 'Actual Description without think block.')
+
     @patch('main.cloudscraper.create_scraper')
     def test_GetPage(self, mock_create_scraper):
         mock_scraper = MagicMock()

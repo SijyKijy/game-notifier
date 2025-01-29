@@ -1,6 +1,7 @@
 import requests
 import random
 import os
+import re
 from bs4 import BeautifulSoup
 import cloudscraper
 from github import Github
@@ -64,7 +65,9 @@ def GetPerpDescription(gameName):
         if response.status_code != 200:
             print(f'[GetPerpDescription] Name: \'{gameName}\' Resp: \'{data}\'')
             raise Exception('Error when get perp description')
-        return data['choices'][0]['message']['content'].strip('"')
+        content = data['choices'][0]['message']['content']
+        cleaned_content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+        return cleaned_content
     except Exception as e:
         print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
         return "¯\_(ツ)_/¯"
