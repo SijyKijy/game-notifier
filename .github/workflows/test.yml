@@ -28,6 +28,6 @@ jobs:
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
         WEBHOOKS_PATH: ${{ secrets.WEBHOOKS_PATH }}
         PERP_TOKEN: ${{ secrets.PERP_TOKEN }}
-        PERP_MODEL: ${{ secrets.PERP_MODEL }}
+        PERP_MODEL: ${{ vars.PERP_MODEL }}
         PERP_PROMPT: ${{ vars.PERP_PROMPT }}
       run: python -m unittest discover -s . -p "test_*.py"
