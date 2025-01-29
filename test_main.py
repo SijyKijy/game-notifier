@@ -8,7 +8,7 @@ class TestMain(unittest.TestCase):
     def test_GetPerpDescription(self, mock_post):
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = {
-            'choices': [{'message': {'content': '"Test Description"'}}]
+            'choices': [{'message': {'content': 'Test Description'}}]
         }
         result = main.GetPerpDescription('Test Game')
         self.assertEqual(result, 'Test Description')
