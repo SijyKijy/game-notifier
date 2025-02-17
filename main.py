@@ -71,6 +71,7 @@ def GetPerpDescription(gameName):
             raise Exception('Error when get perp description')
         content = data['choices'][0]['message']['content']
         cleaned_content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+        cleaned_content = re.sub(r'\[\d+\]', '', cleaned_content)
         return cleaned_content
     except Exception as e:
         print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
