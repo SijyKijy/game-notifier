@@ -32,6 +32,7 @@ webhook_urls = json.loads(WEBHOOKS_PATH)
 
 excluded_ids = [
     '5592' # Squad
+    '976' # DayZ (RGDayZ) 
     ]
 
 def IsUrl(url):
