@@ -42,8 +42,9 @@ class TestMain(unittest.TestCase):
         self.assertEqual(result, b'<html></html>')
 
         mock_scraper.get.return_value.status_code = 500
-        with self.assertRaises(Exception):
+        with self.assertRaises(Exception) as context:
             main.GetPage()
+        self.assertTrue('Error when getting page: Неверный статус ответа: 500' in str(context.exception))
 
     @patch('main.GetPage')
     @patch('main.BeautifulSoup')
@@ -56,27 +57,50 @@ class TestMain(unittest.TestCase):
             result = main.GetGames()
             self.assertEqual(result, [{'Id': '1'}])
 
-    def test_GetNewGames(self):
+    def test_GetNewGames_first_id_changed(self):
         games = [{'Id': '1'}, {'Id': '2'}, {'Id': '3'}]
+        # Случай 1: Изменился первый ID
         result = main.GetNewGames(games, '2')
         self.assertEqual(result, [{'Id': '1'}])
+
+    def test_GetNewGames_second_id_changed(self):
+        games = [{'Id': '1'}, {'Id': '2'}, {'Id': '3'}]
+        # Случай 2: Первый ID не изменился, но изменился второй ID
+        result = main.GetNewGames(games, '1,3')
+        self.assertEqual(result, [{'Id': '2'}])
+
+    def test_GetNewGames_both_ids_changed(self):
+        games = [{'Id': '1'}, {'Id': '2'}, {'Id': '3'}]
+        # Случай 3: Оба ID изменились
+        result = main.GetNewGames(games, '4,5')
+        self.assertEqual(result, games)
+
+    def test_GetNewGames_no_changes(self):
+        games = [{'Id': '1'}, {'Id': '2'}, {'Id': '3'}]
+        # Случай 4: Ни один ID не изменился
+        result = main.GetNewGames(games, '1,2')
+        self.assertEqual(result, [])
 
     @patch('main.githubApi.get_gist')
     def test_GetLastId(self, mock_get_gist):
         mock_gist = MagicMock()
-        mock_gist.description = '123'
+        mock_gist.description = '123,456'
         mock_get_gist.return_value = mock_gist
 
         result = main.GetLastId()
-        self.assertEqual(result, '123')
+        self.assertEqual(result, '123,456')
 
     @patch('main.githubApi.get_gist')
     def test_SaveId(self, mock_get_gist):
         mock_gist = MagicMock()
         mock_get_gist.return_value = mock_gist
 
-        main.SaveId('123')
-        mock_gist.edit.assert_called_with('123')
+        main.SaveId('123,456')
+        mock_gist.edit.assert_called_with('123,456')
+
+        # Проверка обработки ошибок
+        mock_gist.edit.side_effect = Exception('Test error')
+        main.SaveId('123,456')  # Ошибка должна быть обработана внутри метода
 
     @patch('main.ConvertGameToEmbed', return_value={'title': 'Test Embed'})
     @patch('main.aiohttp.ClientSession')
@@ -89,16 +113,39 @@ class TestMain(unittest.TestCase):
         asyncio.run(main.Notify(game))
         mock_ConvertGameToEmbed.assert_called_with(game)
 
-    @patch('main.GetLastId', return_value='1')
-    @patch('main.GetGames', return_value=[{'Id': '2'}])
+    @patch('main.GetLastId', return_value='1,2')
+    @patch('main.GetGames', return_value=[{'Id': '3'}, {'Id': '4'}])
+    @patch('main.GetNewGames', return_value=[{'Id': '3'}, {'Id': '4'}])
     @patch('main.SaveId')
-    @patch('main.Notify')
-    def test_Start(self, mock_Notify, mock_SaveId, mock_GetGames, mock_GetLastId):
+    @patch('asyncio.run')
+    def test_Start(self, mock_asyncio_run, mock_SaveId, mock_GetNewGames, mock_GetGames, mock_GetLastId):
         main.Start()
         mock_GetLastId.assert_called_once()
         mock_GetGames.assert_called_once()
-        mock_SaveId.assert_called_once_with('2')
-        mock_Notify.assert_called_once()
+        mock_GetNewGames.assert_called_once()
+        mock_SaveId.assert_called_once_with('3,4')
+        
+    @patch('main.GetLastId', return_value='1,2')
+    @patch('main.GetGames', return_value=[{'Id': '1'}, {'Id': '2'}])
+    @patch('main.SaveId')
+    @patch('asyncio.run')
+    def test_Start_no_new_games(self, mock_asyncio_run, mock_SaveId, mock_GetGames, mock_GetLastId):
+        main.Start()
+        mock_GetLastId.assert_called_once()
+        mock_GetGames.assert_called_once()
+        mock_SaveId.assert_not_called()
+        mock_asyncio_run.assert_not_called()
+        
+    @patch('main.GetLastId', return_value='1,2')
+    @patch('main.GetGames', return_value=[])
+    @patch('main.SaveId')
+    @patch('asyncio.run')
+    def test_Start_no_games(self, mock_asyncio_run, mock_SaveId, mock_GetGames, mock_GetLastId):
+        main.Start()
+        mock_GetLastId.assert_called_once()
+        mock_GetGames.assert_called_once()
+        mock_SaveId.assert_not_called()
+        mock_asyncio_run.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()

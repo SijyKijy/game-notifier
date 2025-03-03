@@ -36,6 +36,14 @@ excluded_ids = [
     ]
 
 def IsUrl(url):
+    """Проверяет, является ли строка корректным URL.
+    
+    Args:
+        url: Строка для проверки
+        
+    Returns:
+        bool: True если строка является корректным URL, иначе False
+    """
     try:
         result = urlparse(url)
         return all([result.scheme, result.netloc])
@@ -43,6 +51,14 @@ def IsUrl(url):
         return False
 
 def GetPerpDescription(gameName):
+    """Получает описание игры с использованием Perplexity AI.
+    
+    Args:
+        gameName: Название игры
+        
+    Returns:
+        str: Описание игры или строку-заполнитель при ошибке
+    """
     url = "https://api.perplexity.ai/chat/completions"
     payload = {
         "model": PERP_MODEL,
@@ -79,6 +95,14 @@ def GetPerpDescription(gameName):
         return "¯\_(ツ)_/¯"
 
 def ConvertPageToGame(game):
+    """Преобразует HTML-элемент игры в структурированный объект.
+    
+    Args:
+        game: HTML-элемент игры из BeautifulSoup
+        
+    Returns:
+        dict: Словарь с информацией об игре или None, если элементы не найдены
+    """
     elements = game.select('div.header-h1 > a, div.short-story > div.maincont > div, div.short-story > div.maincont > div > p > a')
     comment = game.select('span[style]')
     photoUrl = elements[2].get('href') if len(elements) > 2 and IsUrl(elements[2].get('href')) else None
@@ -95,6 +119,14 @@ def ConvertPageToGame(game):
     }
 
 def ConvertGameToEmbed(game):
+    """Преобразует игру в формат Discord embed.
+    
+    Args:
+        game: Словарь с информацией об игре
+        
+    Returns:
+        dict: Discord embed объект для отправки в webhook
+    """
     title = game['Title']
     url = game['Url']
     photoUrl = game['PhotoUrl']
@@ -116,39 +148,93 @@ def ConvertGameToEmbed(game):
     return resultEmbed
 
 def GetPage():
+    """Получает HTML-страницу с сайта freetp.org.
+    
+    Returns:
+        bytes: HTML-содержимое страницы
+        
+    Raises:
+        Exception: Если возникла ошибка при получении страницы
+    """
     print('Get page')
-    scraper = cloudscraper.create_scraper(delay=10, browser='chrome')
-    response = scraper.get('https://freetp.org/')
-    if response.status_code != 200:
-        raise Exception('Error when getting page')
-    return response.content
+    try:
+        scraper = cloudscraper.create_scraper(delay=10, browser='chrome')
+        response = scraper.get('https://freetp.org/')
+        if response.status_code != 200:
+            raise Exception(f'Неверный статус ответа: {response.status_code}')
+        return response.content
+    except Exception as e:
+        print(f'Error when getting page: {str(e)}')
+        raise Exception(f'Error when getting page: {str(e)}')
 
 def GetGames():
+    """Получает список всех игр с сайта.
+    
+    Returns:
+        list: Список словарей с информацией об играх
+    """
     print('Get games')
     page = GetPage()
     soup = BeautifulSoup(page, 'html.parser')
     elements = soup.select('#dle-content > div.base')
     return list(filter(lambda g: g, map(ConvertPageToGame, elements)))
 
-def GetNewGames(games, lastId):
+def GetNewGames(games, lastIds):
+    """Определяет новые игры, сравнивая текущие ID с сохраненными.
+    
+    Args:
+        games: Список словарей с информацией об играх
+        lastIds: Строка с сохраненными ID игр (через запятую)
+        
+    Returns:
+        list: Список новых игр
+    """
     print('Get new games')
-    index = next((index for (index, d) in enumerate(games) if d["Id"] == lastId), None)
-    return games[:index]
+    lastIdsList = lastIds.split(',') if ',' in lastIds else [lastIds]
+    currentIds = [game["Id"] for game in games[:2]]
+    
+    if len(currentIds) > 0 and currentIds[0] != lastIdsList[0]:
+        index = next((index for (index, d) in enumerate(games) if d["Id"] == lastIdsList[0]), None)
+        if index is None:
+            return games
+        return games[:index]
+    elif len(currentIds) > 1 and len(lastIdsList) > 1 and currentIds[1] != lastIdsList[1]:
+        index = next((index for (index, d) in enumerate(games[1:], 1) if d["Id"] == lastIdsList[1]), None)
+        if index is None:
+            return games[1:]
+        return games[1:index]
+    
+    return []
 
 def GetLastId():
+    """Получает последние сохраненные ID игр из GitHub Gist.
+    
+    Returns:
+        str: Строка с сохраненными ID игр
+    """
     print('Get last id')
     gist = githubApi.get_gist(GIST_ID)
     return gist.description
 
-def SaveId(newId):
+def SaveId(newIds):
+    """Сохраняет новые ID игр в GitHub Gist.
+    
+    Args:
+        newIds: Строка с ID игр для сохранения
+    """
     print('Save new id')
     try:
         gist = githubApi.get_gist(GIST_ID)
-        gist.edit(newId)
-    except:
-        print(f'Error saving id (NewId: {newId})')
+        gist.edit(newIds)
+    except Exception as e:
+        print(f'Error saving id (NewIds: {newIds}, Error: {str(e)})')
 
 async def Notify(game):
+    """Отправляет уведомление о новой игре в Discord webhooks.
+    
+    Args:
+        game: Словарь с информацией об игре
+    """
     gameTitle = game['Title']
     print(f'[Notify] Notify Title: {gameTitle}')
     embed = ConvertGameToEmbed(game)
@@ -185,7 +271,7 @@ async def Notify(game):
     print('[Notify] Done')
 
 def Start():
-    lastId = GetLastId()
+    lastIds = GetLastId()
     games = GetGames()
     games = [game for game in games if game['Id'] not in excluded_ids]
     if not games:
@@ -193,13 +279,18 @@ def Start():
         return
     
     print(f'Game IDs: {", ".join(str(game["Id"]) for game in games)}')
-    newId = games[0]['Id']
-    if lastId == newId:
+    
+    if len(games) >= 2:
+        newIds = f"{games[0]['Id']},{games[1]['Id']}"
+    else:
+        newIds = games[0]['Id']
+    
+    if lastIds == newIds:
         print('New games not found')
         return
 
     print('Games founded')
-    newGames = GetNewGames(games, lastId)
+    newGames = GetNewGames(games, lastIds)
     newGames.reverse()
     print(f'New games founded (Count: {len(newGames)})')
 
@@ -209,7 +300,7 @@ def Start():
 
     asyncio.run(notify_games_async(newGames))
 
-    SaveId(newId)
+    SaveId(newIds)
 
 if __name__ == "__main__":
     Start()
