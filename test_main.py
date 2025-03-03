@@ -44,7 +44,7 @@ class TestMain(unittest.TestCase):
         mock_scraper.get.return_value.status_code = 500
         with self.assertRaises(Exception) as context:
             main.GetPage()
-        self.assertTrue('Error when getting page: Неверный статус ответа: 500' in str(context.exception))
+        self.assertTrue('Error when getting page: Invalid response status: 500' in str(context.exception))
 
     @patch('main.GetPage')
     @patch('main.BeautifulSoup')
