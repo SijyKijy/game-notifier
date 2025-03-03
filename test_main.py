@@ -31,26 +31,20 @@ class TestMain(unittest.TestCase):
         result = main.GetPerpDescription('Test Game with Think')
         self.assertEqual(result, 'Actual Description without think block.')
 
-    @patch('main.requests.post')
-    def test_GetPage(self, mock_post):
-        mock_post.return_value.json.return_value = {
-            "status": "ok",
-            "solution": {
-                "response": "<html></html>"
-            }
-        }
+    @patch('main.cloudscraper.create_scraper')
+    def test_GetPage(self, mock_create_scraper):
+        mock_scraper = MagicMock()
+        mock_scraper.get.return_value.status_code = 200
+        mock_scraper.get.return_value.content = b'<html></html>'
+        mock_create_scraper.return_value = mock_scraper
 
         result = main.GetPage()
         self.assertEqual(result, b'<html></html>')
 
-        mock_post.return_value.json.return_value = {
-            "status": "error",
-            "message": "Cloudflare challenge failed"
-        }
-        
+        mock_scraper.get.return_value.status_code = 500
         with self.assertRaises(Exception) as context:
             main.GetPage()
-        self.assertTrue('Failed to bypass Cloudflare protection' in str(context.exception))
+        self.assertTrue('Error when getting page: Неверный статус ответа: 500' in str(context.exception))
 
     @patch('main.GetPage')
     @patch('main.BeautifulSoup')

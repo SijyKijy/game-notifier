@@ -2,8 +2,8 @@ name: games-notifier
 
 on:
     schedule:
-        - cron: "0 * * * *"
-    workflow_dispatch:
+        - cron: "0 * * * *" # hourly
+    workflow_dispatch: # allows manual triggering
 jobs:
     build:
         runs-on: ubuntu-latest
@@ -14,37 +14,14 @@ jobs:
             - name: setup python
               uses: actions/setup-python@v4
               with:
-                  python-version: "3.9"
+                  python-version: "3.9" # install the python version needed
 
             - name: install python packages
               run: |
                 python -m pip install --upgrade pip
                 pip install -r requirements.txt
-                pip install playwright flare-bypasser
 
-            - name: install system dependencies
-              run: |
-                sudo apt-get update
-                sudo apt-get install -y xvfb
-
-            - name: install browser
-              run: python -m playwright install chromium
-                
-            - name: start flare-bypass server
-              run: |
-                python -m flare_bypasser.server > server.log 2>&1 &
-                echo "Waiting for server to start..."
-                sleep 10
-                # Check if server is running
-                if curl -s http://localhost:8080/v1 -o /dev/null; then
-                  echo "Server is running"
-                else
-                  echo "Server failed to start. Server logs:"
-                  cat server.log
-                  exit 1
-                fi
-              
-            - name: execute py script
+            - name: execute py script # run main.py
               env:
                 GIST_ID: ${{ secrets.GIST_ID }}
                 GH_TOKEN: ${{ secrets.GH_TOKEN }}
