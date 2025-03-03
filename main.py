@@ -10,6 +10,7 @@ import asyncio
 import json
 import aiohttp
 from urllib.parse import urlparse
+import httpx
 
 load_dotenv()
 
@@ -32,7 +33,7 @@ webhook_urls = json.loads(WEBHOOKS_PATH)
 
 excluded_ids = [
     '5592', # Squad
-    '976' # DayZ (RGDayZ) 
+    '976' # DayZ (RGDayZ)
     ]
 
 def IsUrl(url):
@@ -85,13 +86,13 @@ def GetPerpDescription(gameName):
         data = response.json()
         if response.status_code != 200:
             print(f'[GetPerpDescription] Name: \'{gameName}\' Resp: \'{data}\'')
-            raise Exception('Error when get perp description')
+            raise Exception('Error while getting perplexity description')
         content = data['choices'][0]['message']['content']
         cleaned_content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
         cleaned_content = re.sub(r'\[\d+\]', '', cleaned_content)
         return cleaned_content
     except Exception as e:
-        print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
+        print(f'[GetPerpDescription] Error while getting game description (GameName: \'{gameName}\') (Error: {str(e)})')
         return "¯\_(ツ)_/¯"
 
 def ConvertPageToGame(game):
@@ -148,7 +149,7 @@ def ConvertGameToEmbed(game):
     return resultEmbed
 
 def GetPage():
-    """Получает HTML-страницу с сайта freetp.org.
+    """Получает HTML-страницу с сайта freetp.org
     
     Returns:
         bytes: HTML-содержимое страницы
@@ -158,14 +159,26 @@ def GetPage():
     """
     print('Get page')
     try:
-        scraper = cloudscraper.create_scraper(delay=10, browser='chrome')
-        response = scraper.get('https://freetp.org/')
-        if response.status_code != 200:
-            raise Exception(f'Неверный статус ответа: {response.status_code}')
-        return response.content
+        bypasser_url = "http://localhost:8080/v1"
+        headers = {"Content-Type": "application/json"}
+        data = {
+            "cmd": "request.get",
+            "url": "https://freetp.org/",
+            "maxTimeout": 60000
+        }
+        
+        response = requests.post(bypasser_url, headers=headers, json=data)
+        result = response.json()
+        
+        if result["status"] != "ok":
+            raise Exception(f"Failed to bypass Cloudflare protection: {result['message']}")
+        
+        html_content = result["solution"]["response"]
+        
+        return html_content.encode('utf-8')
     except Exception as e:
-        print(f'Error when getting page: {str(e)}')
-        raise Exception(f'Error when getting page: {str(e)}')
+        print(f'Error getting page: {str(e)}')
+        raise Exception(f'Error getting page: {str(e)}')
 
 def GetGames():
     """Получает список всех игр с сайта.
@@ -256,7 +269,7 @@ async def Notify(game):
                     elif response.status > 300:
                         print(f'[Notify] Req: {webhookContent}')
                         print(f'[Notify] [{response.status}] Resp: {await response.text()}')
-                        raise Exception('Error when notify game')
+                        raise Exception('Error when notifying game')
                     else:
                         break
 
@@ -289,10 +302,10 @@ def Start():
         print('New games not found')
         return
 
-    print('Games founded')
+    print('Games found')
     newGames = GetNewGames(games, lastIds)
     newGames.reverse()
-    print(f'New games founded (Count: {len(newGames)})')
+    print(f'New games found (Count: {len(newGames)})')
 
     async def notify_games_async(newGames):
         for game in newGames:
