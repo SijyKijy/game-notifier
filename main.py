@@ -129,7 +129,8 @@ def ConvertGameToEmbed(game):
     url = game['Url']
     photoUrl = game['PhotoUrl']
     comment = game['Comment']
-    desc = GetPerpDescription(title)
+    #desc = GetPerpDescription(title)
+    desc = 'Aboba'
     
     resultEmbed = {
         'title': f'**{title}**',
