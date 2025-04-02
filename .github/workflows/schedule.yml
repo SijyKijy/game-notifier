@@ -29,4 +29,5 @@ jobs:
                 PERP_TOKEN: ${{ secrets.PERP_TOKEN }}
                 PERP_MODEL: ${{ vars.PERP_MODEL }}
                 PERP_PROMPT: ${{ vars.PERP_PROMPT }}
+                PERP_URL: ${{ vars.PERP_URL }}
               run: python main.py

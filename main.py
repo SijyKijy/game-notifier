@@ -20,8 +20,9 @@ try:
     PERP_TOKEN = os.environ["PERP_TOKEN"]
     PERP_MODEL = os.environ["PERP_MODEL"]
     PERP_PROMPT = os.environ["PERP_PROMPT"]
+    PERP_URL = os.environ["PERP_URL"]
 
-    if not all([GIST_ID, GH_TOKEN, WEBHOOKS_PATH, PERP_TOKEN, PERP_MODEL, PERP_PROMPT]):
+    if not all([GIST_ID, GH_TOKEN, WEBHOOKS_PATH, PERP_TOKEN, PERP_MODEL, PERP_PROMPT, PERP_URL]):
         raise KeyError("One or more environment variables are missing")
 except KeyError:
     print('Error when getting variables')
@@ -57,7 +58,7 @@ def GetPerpDescription(gameName):
     Returns:
         str: Описание игры или строку-заполнитель при ошибке
     """
-    url = "https://api.perplexity.ai/chat/completions"
+    url = PERP_URL
     payload = {
         "model": PERP_MODEL,
         "messages": [
@@ -129,8 +130,7 @@ def ConvertGameToEmbed(game):
     url = game['Url']
     photoUrl = game['PhotoUrl']
     comment = game['Comment']
-    #desc = GetPerpDescription(title)
-    desc = 'Aboba'
+    desc = GetPerpDescription(title)
     
     resultEmbed = {
         'title': f'**{title}**',
