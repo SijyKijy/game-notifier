@@ -104,7 +104,7 @@ def ConvertPageToGame(game):
         dict: Словарь с информацией об игре или None, если элементы не найдены
     """
     elements = game.select('div.header-h1 > a, div.short-story > div.maincont > div, div.short-story > div.maincont > div > p > a')
-    comment = game.select('span[style]')
+    comment = game.select('div[style] > p > span')
     photoUrl = elements[2].get('href') if len(elements) > 2 and IsUrl(elements[2].get('href')) else None
 
     if not elements:
