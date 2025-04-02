@@ -75,7 +75,8 @@ def GetPerpDescription(gameName):
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
-        "authorization": f'Bearer {PERP_TOKEN}'
+        "authorization": f'Bearer {PERP_TOKEN}',
+        "User-Agent": ""
     }
 
     try:
