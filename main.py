@@ -160,7 +160,7 @@ def GetPage():
     print('Get page')
     try:
         scraper = cloudscraper.create_scraper(delay=10, browser='chrome')
-        response = scraper.get('https://freetp.org/')
+        response = scraper.get('https://freetp.org/po-seti/')
         if response.status_code != 200:
             raise Exception(f'Invalid response status: {response.status_code}')
         return response.content
