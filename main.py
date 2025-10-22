@@ -73,7 +73,7 @@ def GetPerpDescription(gameName):
         ],
         "web_search_options": {
             "search_context_size": "medium",
-            "image_search_relevance_enhanced": false
+            "image_search_relevance_enhanced": "false"
         }
     }
     headers = {
