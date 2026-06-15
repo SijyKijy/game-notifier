@@ -16,6 +16,14 @@ jobs:
               with:
                   python-version: "3.9" # install the python version needed
 
+            - name: setup node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: install claude code cli
+              run: npm install -g @anthropic-ai/claude-code
+
             - name: install python packages
               run: |
                 python -m pip install --upgrade pip
@@ -30,4 +38,8 @@ jobs:
                 PERP_MODEL: ${{ vars.PERP_MODEL }}
                 PERP_PROMPT: ${{ vars.PERP_PROMPT }}
                 PERP_URL: ${{ vars.PERP_URL }}
+                DESC_PROVIDER: ${{ vars.DESC_PROVIDER }}
+                CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                CLAUDE_PROMPT: ${{ vars.CLAUDE_PROMPT }}
+                CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
               run: python main.py
