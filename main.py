@@ -2,6 +2,7 @@ import requests
 import random
 import os
 import re
+import subprocess
 from bs4 import BeautifulSoup
 import cloudscraper
 from github import Github
@@ -10,6 +11,7 @@ import asyncio
 import json
 import aiohttp
 from urllib.parse import urlparse
+from steam_lookup import get_steam_context
 
 load_dotenv()
 
@@ -99,6 +101,49 @@ def GetPerpDescription(gameName):
         print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
         return "¯\_(ツ)_/¯"
 
+def GetClaudeDescription(gameName, context=None):
+    user_message = gameName
+    if context:
+        user_message = f'{gameName}\n\n<context>\n{context}\n</context>'
+
+    cmd = [
+        'claude', '-p', user_message,
+        '--system-prompt', os.environ.get('CLAUDE_PROMPT', ''),
+        '--model', os.environ.get('CLAUDE_MODEL', ''),
+        '--allowedTools', 'WebSearch WebFetch',
+        '--permission-mode', 'bypassPermissions',
+        '--output-format', 'text',
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        if result.returncode != 0:
+            stderr = (result.stderr or '').strip()
+            print(f'[GetClaudeDescription] Name: \'{gameName}\' rc={result.returncode} stderr: \'{stderr}\'')
+            return "¯\_(ツ)_/¯"
+        output = (result.stdout or '').strip()
+        if not output:
+            print(f'[GetClaudeDescription] Empty output (GameName: \'{gameName}\')')
+            return "¯\_(ツ)_/¯"
+        return output
+    except Exception as e:
+        print(f'[GetClaudeDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
+        return "¯\_(ツ)_/¯"
+
+def GetDescription(gameName, context=None):
+    provider = os.environ.get("DESC_PROVIDER", "perplexity").lower()
+    if provider == "claude":
+        return GetClaudeDescription(gameName, context)
+    return GetPerpDescription(gameName)
+
+def SanitizeDesc(text):
+    if not text:
+        return ""
+    text = text.strip()
+    if len(text) > 1500:
+        text = text[:1499].rstrip() + "…"
+    return text
+
 def ConvertPageToGame(game):
     """Преобразует HTML-элемент игры в структурированный объект.
     
@@ -136,12 +181,28 @@ def ConvertGameToEmbed(game):
     url = game['Url']
     photoUrl = game['PhotoUrl']
     comment = game['Comment']
-    desc = GetPerpDescription(title)
-    
+
+    context = None
+    if os.environ.get("DESC_PROVIDER", "perplexity").lower() == "claude":
+        parts = []
+        if comment:
+            parts.append(comment)
+        steamContext = get_steam_context(title)
+        if steamContext:
+            parts.append(steamContext)
+        context = "\n\n".join(parts) if parts else None
+
+    desc = GetDescription(title, context)
+
+    embedTitle = title if len(title) <= 256 else title[:255] + "…"
+    description = f'{comment}\n---\n{SanitizeDesc(desc)}'
+    if len(description) > 4096:
+        description = description[:4095] + "…"
+
     resultEmbed = {
-        'title': f'**{title}**',
+        'title': embedTitle,
         'url': url,
-        'description': f'{comment}\n---\n{desc}',
+        'description': description,
         'color': random.randint(1, 16777215)
     }
 
