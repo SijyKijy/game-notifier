@@ -101,6 +101,20 @@ def GetPerpDescription(gameName):
         print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
         return "¯\_(ツ)_/¯"
 
+def ExtractBlock(text):
+    if not text:
+        return ""
+    text = text.strip()
+    marker = "**Название:**"
+    i = text.find(marker)
+    if i != -1:
+        text = text[i:]
+    for tail in ("\nSources:", "\nИсточники:", "\nNote:", "\nDisclosure:", "\n**Sources", "\nИсточник:"):
+        j = text.find(tail)
+        if j != -1:
+            text = text[:j]
+    return text.strip()
+
 def GetClaudeDescription(gameName, context=None):
     user_message = gameName
     if context:
@@ -121,7 +135,7 @@ def GetClaudeDescription(gameName, context=None):
             stderr = (result.stderr or '').strip()
             print(f'[GetClaudeDescription] Name: \'{gameName}\' rc={result.returncode} stderr: \'{stderr}\'')
             return "¯\_(ツ)_/¯"
-        output = (result.stdout or '').strip()
+        output = ExtractBlock(result.stdout)
         if not output:
             print(f'[GetClaudeDescription] Empty output (GameName: \'{gameName}\')')
             return "¯\_(ツ)_/¯"
