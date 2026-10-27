@@ -4,13 +4,13 @@ import os
 import re
 import subprocess
 from bs4 import BeautifulSoup
-import cloudscraper
-from github import Github
+from curl_cffi import requests as browser_requests
+from github import Auth, Github
 from dotenv import load_dotenv
 import asyncio
 import json
 import aiohttp
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from steam_lookup import get_steam_context
 
 load_dotenv()
@@ -30,7 +30,7 @@ except KeyError:
     print('Error when getting variables')
     raise
 
-githubApi = Github(GH_TOKEN)
+githubApi = Github(auth=Auth.Token(GH_TOKEN))
 webhook_urls = json.loads(WEBHOOKS_PATH)
 
 excluded_ids = [ 
@@ -99,7 +99,7 @@ def GetPerpDescription(gameName):
         return cleaned_content
     except Exception as e:
         print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
-        return "¯\_(ツ)_/¯"
+        return r"¯\_(ツ)_/¯"
 
 def ExtractBlock(text):
     if not text:
@@ -134,15 +134,15 @@ def GetClaudeDescription(gameName, context=None):
         if result.returncode != 0:
             stderr = (result.stderr or '').strip()
             print(f'[GetClaudeDescription] Name: \'{gameName}\' rc={result.returncode} stderr: \'{stderr}\'')
-            return "¯\_(ツ)_/¯"
+            return r"¯\_(ツ)_/¯"
         output = ExtractBlock(result.stdout)
         if not output:
             print(f'[GetClaudeDescription] Empty output (GameName: \'{gameName}\')')
-            return "¯\_(ツ)_/¯"
+            return r"¯\_(ツ)_/¯"
         return output
     except Exception as e:
         print(f'[GetClaudeDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
-        return "¯\_(ツ)_/¯"
+        return r"¯\_(ツ)_/¯"
 
 def GetDescription(gameName, context=None):
     provider = os.environ.get("DESC_PROVIDER", "perplexity").lower()
@@ -167,19 +167,24 @@ def ConvertPageToGame(game):
     Returns:
         dict: Словарь с информацией об игре или None, если элементы не найдены
     """
-    elements = game.select('div.header-h1 > a, div.short-story > div.maincont > div, div.short-story > div.maincont > div > p > a')
-    comment = game.select('div[style] > p > span')
-    photoUrl = elements[2].get('href') if len(elements) > 2 and IsUrl(elements[2].get('href')) else None
-
-    if not elements:
+    title = game.select_one('.game-card__title > a')
+    url = title.get('href', '') if title else ''
+    if not IsUrl(url):
+        return None
+    gameId = re.search(r'/(\d+)-[^/]+\.html$', urlparse(url).path)
+    if not gameId:
         return None
 
+    image = game.select_one('.game-card__media img')
+    photoUrl = urljoin(url, image['src']) if image and image.get('src') else None
+    comment = game.select_one('.game-card__update b')
+
     return {
-        'Id': elements[1].get('id')[8:],  # Example: 'news-id-5189'
-        'Title': elements[0].get_text(strip=True),
-        'Url': elements[0].get('href'),
-        'PhotoUrl': photoUrl,
-        'Comment': comment[0].get_text(strip=True) if len(comment) > 0 else None
+        'Id': gameId.group(1),
+        'Title': title.get_text(strip=True),
+        'Url': url,
+        'PhotoUrl': photoUrl if IsUrl(photoUrl) else None,
+        'Comment': comment.get_text(strip=True) if comment else None
     }
 
 def ConvertGameToEmbed(game):
@@ -238,14 +243,15 @@ def GetPage():
     """
     print('Get page')
     try:
-        scraper = cloudscraper.create_scraper(delay=10, browser='chrome')
-        response = scraper.get('https://freetp.org/po-seti/')
+        response = browser_requests.get(
+            'https://freetp.org/po-seti/', impersonate='chrome', timeout=30
+        )
         if response.status_code != 200:
             raise Exception(f'Invalid response status: {response.status_code}')
         return response.content
     except Exception as e:
         print(f'Error when getting page: {str(e)}')
-        raise Exception(f'Error when getting page: {str(e)}')
+        raise Exception(f'Error when getting page: {str(e)}') from e
 
 def GetGames():
     """Получает список всех игр с сайта.
@@ -256,7 +262,9 @@ def GetGames():
     print('Get games')
     page = GetPage()
     soup = BeautifulSoup(page, 'html.parser')
-    elements = soup.select('#dle-content > div.base')
+    elements = soup.select('article.game-card')
+    if not elements:
+        raise ValueError('Game cards not found: FreeTP markup changed or access was blocked')
     return list(filter(lambda g: g, map(ConvertPageToGame, elements)))
 
 def GetNewGames(games, lastIds):

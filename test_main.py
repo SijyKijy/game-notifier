@@ -16,7 +16,7 @@ class TestMain(unittest.TestCase):
         mock_post.return_value.status_code = 500
         mock_post.return_value.json.return_value = {}
         result = main.GetPerpDescription('Test Game')
-        self.assertEqual(result, "¯\_(ツ)_/¯")
+        self.assertEqual(result, r"¯\_(ツ)_/¯")
 
     @patch('main.requests.post')
     def test_GetPerpDescription_with_think_block(self, mock_post):
@@ -31,20 +31,57 @@ class TestMain(unittest.TestCase):
         result = main.GetPerpDescription('Test Game with Think')
         self.assertEqual(result, 'Actual Description without think block.')
 
-    @patch('main.cloudscraper.create_scraper')
-    def test_GetPage(self, mock_create_scraper):
-        mock_scraper = MagicMock()
-        mock_scraper.get.return_value.status_code = 200
-        mock_scraper.get.return_value.content = b'<html></html>'
-        mock_create_scraper.return_value = mock_scraper
+    @patch('main.browser_requests.get')
+    def test_GetPage(self, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.content = b'<html></html>'
 
         result = main.GetPage()
         self.assertEqual(result, b'<html></html>')
+        mock_get.assert_called_once_with(
+            'https://freetp.org/po-seti/', impersonate='chrome', timeout=30
+        )
 
-        mock_scraper.get.return_value.status_code = 500
-        with self.assertRaises(Exception) as context:
+        for status in (403, 500):
+            with self.subTest(status=status):
+                mock_get.return_value.status_code = status
+                with self.assertRaisesRegex(Exception, f'Invalid response status: {status}'):
+                    main.GetPage()
+
+        mock_get.side_effect = TimeoutError('Request timed out')
+        with self.assertRaisesRegex(Exception, 'Error when getting page: Request timed out'):
             main.GetPage()
-        self.assertTrue('Error when getting page: Invalid response status: 500' in str(context.exception))
+
+    def test_ConvertPageToGame(self):
+        page = main.BeautifulSoup('''
+            <article class="game-card fixed_story">
+                <a class="game-card__media-link" href="https://freetp.org/po-seti/2266-conan.html">
+                    <div class="game-card__media">
+                        <img src="/uploads/posts/conan.jpg">
+                        <div class="game-card__update"><span>12-06-2026</span><b>Обновлено</b></div>
+                    </div>
+                </a>
+                <h2 class="game-card__title"><a href="https://freetp.org/po-seti/2266-conan.html">Conan Exiles</a></h2>
+            </article>
+        ''', 'html.parser')
+        game = page.select_one('article')
+        self.assertEqual(main.ConvertPageToGame(game), {
+            'Id': '2266',
+            'Title': 'Conan Exiles',
+            'Url': 'https://freetp.org/po-seti/2266-conan.html',
+            'PhotoUrl': 'https://freetp.org/uploads/posts/conan.jpg',
+            'Comment': 'Обновлено',
+        })
+
+        game.select_one('.game-card__media').decompose()
+        result = main.ConvertPageToGame(game)
+        self.assertIsNone(result['PhotoUrl'])
+        self.assertIsNone(result['Comment'])
+
+        game.select_one('.game-card__title a')['href'] = 'https://freetp.org/po-seti/'
+        self.assertIsNone(main.ConvertPageToGame(game))
+        game.select_one('.game-card__title').decompose()
+        self.assertIsNone(main.ConvertPageToGame(game))
 
     @patch('main.GetPage')
     @patch('main.BeautifulSoup')
@@ -56,6 +93,12 @@ class TestMain(unittest.TestCase):
         with patch('main.ConvertPageToGame', return_value={'Id': '1'}):
             result = main.GetGames()
             self.assertEqual(result, [{'Id': '1'}])
+            mock_soup.return_value.select.assert_called_once_with('article.game-card')
+
+    @patch('main.GetPage', return_value=b'<html>Access denied</html>')
+    def test_GetGames_rejects_unexpected_markup(self, mock_GetPage):
+        with self.assertRaisesRegex(ValueError, 'Game cards not found'):
+            main.GetGames()
 
     def test_GetNewGames_first_id_changed(self):
         games = [{'Id': '1'}, {'Id': '2'}, {'Id': '3'}]
@@ -117,7 +160,7 @@ class TestMain(unittest.TestCase):
     @patch('main.GetGames', return_value=[{'Id': '3'}, {'Id': '4'}])
     @patch('main.GetNewGames', return_value=[{'Id': '3'}, {'Id': '4'}])
     @patch('main.SaveId')
-    @patch('asyncio.run')
+    @patch('asyncio.run', side_effect=lambda coroutine: coroutine.close())
     def test_Start(self, mock_asyncio_run, mock_SaveId, mock_GetNewGames, mock_GetGames, mock_GetLastId):
         main.Start()
         mock_GetLastId.assert_called_once()
