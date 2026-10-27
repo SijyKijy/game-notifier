@@ -2,6 +2,9 @@ import unittest
 from unittest.mock import patch, MagicMock
 import main
 import asyncio
+import os
+import subprocess
+import sys
 
 class TestMain(unittest.TestCase):
     @patch('main.requests.post')
@@ -16,7 +19,7 @@ class TestMain(unittest.TestCase):
         mock_post.return_value.status_code = 500
         mock_post.return_value.json.return_value = {}
         result = main.GetPerpDescription('Test Game')
-        self.assertEqual(result, r"¯\_(ツ)_/¯")
+        self.assertEqual(result, '')
 
     @patch('main.requests.post')
     def test_GetPerpDescription_with_think_block(self, mock_post):
@@ -62,6 +65,11 @@ class TestMain(unittest.TestCase):
                     </div>
                 </a>
                 <h2 class="game-card__title"><a href="https://freetp.org/po-seti/2266-conan.html">Conan Exiles</a></h2>
+                <div class="text game-card__excerpt">
+                    <p><!--dle_image_begin:image--><img src="/image.jpg"><!--dle_image_end-->Conan — игра &amp; приключение.</p>
+                    <p>Ещё один абзац.</p>
+                    <p><br><strong>Способ по которому можно поиграть:</strong> Steam.</p>
+                </div>
             </article>
         ''', 'html.parser')
         game = page.select_one('article')
@@ -71,17 +79,106 @@ class TestMain(unittest.TestCase):
             'Url': 'https://freetp.org/po-seti/2266-conan.html',
             'PhotoUrl': 'https://freetp.org/uploads/posts/conan.jpg',
             'Comment': 'Обновлено',
+            'Description': 'Conan — игра & приключение. Ещё один абзац.',
         })
 
         game.select_one('.game-card__media').decompose()
         result = main.ConvertPageToGame(game)
         self.assertIsNone(result['PhotoUrl'])
         self.assertIsNone(result['Comment'])
+        game.select_one('.game-card__excerpt').decompose()
+        self.assertEqual(main.ConvertPageToGame(game)['Description'], '')
 
         game.select_one('.game-card__title a')['href'] = 'https://freetp.org/po-seti/'
         self.assertIsNone(main.ConvertPageToGame(game))
         game.select_one('.game-card__title').decompose()
         self.assertIsNone(main.ConvertPageToGame(game))
+
+    @patch('main.GetClaudeDescription')
+    @patch('main.GetPerpDescription')
+    @patch('main.get_steam_context')
+    def test_description_without_ai(self, mock_steam, mock_perp, mock_claude):
+        game = {
+            'Title': 'CRACK', 'Url': 'https://freetp.org/po-seti/7367-crack.html',
+            'PhotoUrl': None, 'Comment': None,
+            'Description': 'CRACK — кооперативное приключение для 1–4 игроков.',
+        }
+        for provider in ('perplexity', '', 'claude', 'none'):
+            with self.subTest(provider=provider), patch.dict(os.environ, {
+                'DESC_PROVIDER': provider, 'CLAUDE_CODE_OAUTH_TOKEN': '',
+            }), patch('main.PERP_TOKEN', ''):
+                embed = main.ConvertGameToEmbed(game)
+                self.assertEqual(embed['description'], game['Description'])
+        mock_perp.assert_not_called()
+        mock_claude.assert_not_called()
+        mock_steam.assert_not_called()
+
+    @patch.dict(os.environ, {'DESC_PROVIDER': 'none'})
+    @patch('main.GetDescription', return_value='')
+    def test_description_last_resort(self, mock_description):
+        game = {
+            'Title': 'CRACK', 'Url': 'https://freetp.org/po-seti/7367-crack.html',
+            'PhotoUrl': None, 'Comment': None,
+        }
+        self.assertEqual(main.ConvertGameToEmbed(game)['description'], r"¯\_(ツ)_/¯")
+        for description in ('', None):
+            with self.subTest(description=description):
+                game['Description'] = description
+                self.assertEqual(main.ConvertGameToEmbed(game)['description'], r"¯\_(ツ)_/¯")
+
+    @patch.dict(os.environ, {'DESC_PROVIDER': 'perplexity'})
+    @patch('main.PERP_TOKEN', 'test-token')
+    @patch('main.PERP_MODEL', 'test-model')
+    @patch('main.PERP_PROMPT', 'test-prompt')
+    @patch('main.PERP_URL', 'https://example.invalid/chat')
+    @patch('main.requests.post')
+    def test_description_falls_back_on_ai_error(self, mock_post):
+        game = {
+            'Title': 'CRACK', 'Url': 'https://freetp.org/po-seti/7367-crack.html',
+            'PhotoUrl': None, 'Comment': 'Обновлено', 'Description': 'Описание FreeTP',
+        }
+        mock_post.return_value.status_code = 500
+        self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Обновлено\n---\nОписание FreeTP')
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {'choices': [{'message': {'content': 'Описание AI'}}]}
+        self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Обновлено\n---\nОписание AI')
+
+    @patch.dict(os.environ, {'DESC_PROVIDER': 'claude', 'CLAUDE_CODE_OAUTH_TOKEN': 'test-token'})
+    @patch('main.get_steam_context', return_value=None)
+    @patch('main.subprocess.run')
+    def test_description_falls_back_on_claude_error(self, mock_run, mock_steam):
+        game = {
+            'Title': 'CRACK', 'Url': 'https://freetp.org/po-seti/7367-crack.html',
+            'PhotoUrl': None, 'Comment': None, 'Description': 'Описание FreeTP',
+        }
+        mock_run.return_value.returncode = 1
+        self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Описание FreeTP')
+        mock_run.return_value.returncode = 0
+        for output in ('', ' \n\t'):
+            with self.subTest(output=output):
+                mock_run.return_value.stdout = output
+                self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Описание FreeTP')
+        mock_run.return_value.stdout = 'Описание Claude'
+        self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Описание Claude')
+        for error in (subprocess.TimeoutExpired('claude', 180), FileNotFoundError('claude')):
+            with self.subTest(error=type(error).__name__):
+                mock_run.side_effect = error
+                self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Описание FreeTP')
+                self.assertEqual(mock_run.call_args.kwargs['timeout'], 180)
+
+    def test_import_without_ai_settings(self):
+        env = os.environ.copy()
+        for name in ('PERP_TOKEN', 'PERP_MODEL', 'PERP_PROMPT', 'PERP_URL', 'CLAUDE_CODE_OAUTH_TOKEN'):
+            env.pop(name, None)
+        env.update({
+            'GIST_ID': 'test', 'GH_TOKEN': 'test-token', 'WEBHOOKS_PATH': '[]',
+            'DESC_PROVIDER': 'none', 'PYTHON_DOTENV_DISABLED': '1',
+        })
+        result = subprocess.run(
+            [sys.executable, '-B', '-W', 'error', '-c', "import main; assert main.GetDescription('CRACK') == ''"],
+            env=env, capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     @patch('main.GetPage')
     @patch('main.BeautifulSoup')

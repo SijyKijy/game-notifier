@@ -15,14 +15,36 @@ jobs:
               uses: actions/setup-python@v4
               with:
                   python-version: "3.15" # install the python version needed
+                  cache: pip
+                  cache-dependency-path: requirements.txt
 
             - name: setup node
+              if: vars.DESC_PROVIDER == 'claude'
               uses: actions/setup-node@v4
               with:
                   node-version: "20"
 
+            - name: get claude code version
+              if: vars.DESC_PROVIDER == 'claude'
+              id: claude-version
+              run: |
+                  version=$(npm view @anthropic-ai/claude-code version)
+                  echo "version=$version" >> "$GITHUB_OUTPUT"
+
+            - name: cache npm packages
+              if: vars.DESC_PROVIDER == 'claude'
+              uses: actions/cache@v4
+              with:
+                  path: ~/.npm
+                  key: ${{ runner.os }}-${{ runner.arch }}-node20-claude-${{ steps.claude-version.outputs.version }}
+                  restore-keys: |
+                      ${{ runner.os }}-${{ runner.arch }}-node20-claude-
+
             - name: install claude code cli
-              run: npm install -g @anthropic-ai/claude-code
+              if: vars.DESC_PROVIDER == 'claude'
+              env:
+                  CLAUDE_VERSION: ${{ steps.claude-version.outputs.version }}
+              run: npm install -g "@anthropic-ai/claude-code@$CLAUDE_VERSION" --prefer-offline --no-audit --no-fund
 
             - name: install python packages
               run: |

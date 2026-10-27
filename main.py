@@ -19,12 +19,12 @@ try:
     GIST_ID = os.environ["GIST_ID"]
     GH_TOKEN = os.environ["GH_TOKEN"]
     WEBHOOKS_PATH = os.environ["WEBHOOKS_PATH"]
-    PERP_TOKEN = os.environ["PERP_TOKEN"]
-    PERP_MODEL = os.environ["PERP_MODEL"]
-    PERP_PROMPT = os.environ["PERP_PROMPT"]
-    PERP_URL = os.environ["PERP_URL"]
+    PERP_TOKEN = os.environ.get("PERP_TOKEN", "")
+    PERP_MODEL = os.environ.get("PERP_MODEL", "")
+    PERP_PROMPT = os.environ.get("PERP_PROMPT", "")
+    PERP_URL = os.environ.get("PERP_URL", "")
 
-    if not all([GIST_ID, GH_TOKEN, WEBHOOKS_PATH, PERP_TOKEN, PERP_MODEL, PERP_PROMPT, PERP_URL]):
+    if not all([GIST_ID, GH_TOKEN, WEBHOOKS_PATH]):
         raise KeyError("One or more environment variables are missing")
 except KeyError:
     print('Error when getting variables')
@@ -58,7 +58,7 @@ def GetPerpDescription(gameName):
         gameName: Название игры
         
     Returns:
-        str: Описание игры или строку-заполнитель при ошибке
+        str: Описание игры или пустую строку при ошибке
     """
     url = PERP_URL
     payload = {
@@ -99,7 +99,7 @@ def GetPerpDescription(gameName):
         return cleaned_content
     except Exception as e:
         print(f'[GetPerpDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
-        return r"¯\_(ツ)_/¯"
+        return ""
 
 def ExtractBlock(text):
     if not text:
@@ -134,21 +134,23 @@ def GetClaudeDescription(gameName, context=None):
         if result.returncode != 0:
             stderr = (result.stderr or '').strip()
             print(f'[GetClaudeDescription] Name: \'{gameName}\' rc={result.returncode} stderr: \'{stderr}\'')
-            return r"¯\_(ツ)_/¯"
+            return ""
         output = ExtractBlock(result.stdout)
         if not output:
             print(f'[GetClaudeDescription] Empty output (GameName: \'{gameName}\')')
-            return r"¯\_(ツ)_/¯"
+            return ""
         return output
     except Exception as e:
         print(f'[GetClaudeDescription] Error when get game desc (GameName: \'{gameName}\') (Error: {str(e)})')
-        return r"¯\_(ツ)_/¯"
+        return ""
 
 def GetDescription(gameName, context=None):
-    provider = os.environ.get("DESC_PROVIDER", "perplexity").lower()
-    if provider == "claude":
+    provider = (os.environ.get("DESC_PROVIDER") or "perplexity").lower()
+    if provider == "claude" and os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
         return GetClaudeDescription(gameName, context)
-    return GetPerpDescription(gameName)
+    if provider == "perplexity" and all([PERP_TOKEN, PERP_MODEL, PERP_PROMPT, PERP_URL]):
+        return GetPerpDescription(gameName)
+    return ""
 
 def SanitizeDesc(text):
     if not text:
@@ -178,13 +180,17 @@ def ConvertPageToGame(game):
     image = game.select_one('.game-card__media img')
     photoUrl = urljoin(url, image['src']) if image and image.get('src') else None
     comment = game.select_one('.game-card__update b')
+    excerpt = game.select_one('.game-card__excerpt')
+    description = excerpt.get_text(' ', strip=True) if excerpt else ''
+    description = description.partition('Способ по которому можно поиграть:')[0].strip()
 
     return {
         'Id': gameId.group(1),
         'Title': title.get_text(strip=True),
         'Url': url,
         'PhotoUrl': photoUrl if IsUrl(photoUrl) else None,
-        'Comment': comment.get_text(strip=True) if comment else None
+        'Comment': comment.get_text(strip=True) if comment else None,
+        'Description': description,
     }
 
 def ConvertGameToEmbed(game):
@@ -202,7 +208,8 @@ def ConvertGameToEmbed(game):
     comment = game['Comment']
 
     context = None
-    if os.environ.get("DESC_PROVIDER", "perplexity").lower() == "claude":
+    if (os.environ.get("DESC_PROVIDER", "").lower() == "claude"
+            and os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")):
         parts = []
         if comment:
             parts.append(comment)
@@ -211,10 +218,12 @@ def ConvertGameToEmbed(game):
             parts.append(steamContext)
         context = "\n\n".join(parts) if parts else None
 
-    desc = GetDescription(title, context)
+    desc = GetDescription(title, context) or game.get('Description') or r"¯\_(ツ)_/¯"
 
     embedTitle = title if len(title) <= 256 else title[:255] + "…"
-    description = f'{comment}\n---\n{SanitizeDesc(desc)}'
+    description = SanitizeDesc(desc)
+    if comment:
+        description = f'{comment}\n---\n{description}'
     if len(description) > 4096:
         description = description[:4095] + "…"
 
