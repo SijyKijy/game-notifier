@@ -1,6 +1,6 @@
-requests==2.31.0
-beautifulsoup4==4.11.1
-cloudscraper==1.2.64
-PyGithub==1.59
-python-dotenv==1.0.0
-aiohttp==3.8.5
+requests==2.34.2
+beautifulsoup4==4.15.0
+cloudscraper==1.2.71
+PyGithub==2.10.0
+python-dotenv==1.2.4
+aiohttp==3.14.5
