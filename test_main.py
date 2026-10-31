@@ -94,24 +94,20 @@ class TestMain(unittest.TestCase):
         game.select_one('.game-card__title').decompose()
         self.assertIsNone(main.ConvertPageToGame(game))
 
-    @patch('main.GetClaudeDescription')
     @patch('main.GetPerpDescription')
-    @patch('main.get_steam_context')
-    def test_description_without_ai(self, mock_steam, mock_perp, mock_claude):
+    def test_description_without_ai(self, mock_perp):
         game = {
             'Title': 'CRACK', 'Url': 'https://freetp.org/po-seti/7367-crack.html',
             'PhotoUrl': None, 'Comment': None,
             'Description': 'CRACK — кооперативное приключение для 1–4 игроков.',
         }
-        for provider in ('perplexity', '', 'claude', 'none'):
+        for provider in ('perplexity', '', 'unknown', 'none'):
             with self.subTest(provider=provider), patch.dict(os.environ, {
-                'DESC_PROVIDER': provider, 'CLAUDE_CODE_OAUTH_TOKEN': '',
+                'DESC_PROVIDER': provider,
             }), patch('main.PERP_TOKEN', ''):
                 embed = main.ConvertGameToEmbed(game)
                 self.assertEqual(embed['description'], game['Description'])
         mock_perp.assert_not_called()
-        mock_claude.assert_not_called()
-        mock_steam.assert_not_called()
 
     @patch.dict(os.environ, {'DESC_PROVIDER': 'none'})
     @patch('main.GetDescription', return_value='')
@@ -143,32 +139,9 @@ class TestMain(unittest.TestCase):
         mock_post.return_value.json.return_value = {'choices': [{'message': {'content': 'Описание AI'}}]}
         self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Обновлено\n---\nОписание AI')
 
-    @patch.dict(os.environ, {'DESC_PROVIDER': 'claude', 'CLAUDE_CODE_OAUTH_TOKEN': 'test-token'})
-    @patch('main.get_steam_context', return_value=None)
-    @patch('main.subprocess.run')
-    def test_description_falls_back_on_claude_error(self, mock_run, mock_steam):
-        game = {
-            'Title': 'CRACK', 'Url': 'https://freetp.org/po-seti/7367-crack.html',
-            'PhotoUrl': None, 'Comment': None, 'Description': 'Описание FreeTP',
-        }
-        mock_run.return_value.returncode = 1
-        self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Описание FreeTP')
-        mock_run.return_value.returncode = 0
-        for output in ('', ' \n\t'):
-            with self.subTest(output=output):
-                mock_run.return_value.stdout = output
-                self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Описание FreeTP')
-        mock_run.return_value.stdout = 'Описание Claude'
-        self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Описание Claude')
-        for error in (subprocess.TimeoutExpired('claude', 180), FileNotFoundError('claude')):
-            with self.subTest(error=type(error).__name__):
-                mock_run.side_effect = error
-                self.assertEqual(main.ConvertGameToEmbed(game)['description'], 'Описание FreeTP')
-                self.assertEqual(mock_run.call_args.kwargs['timeout'], 180)
-
     def test_import_without_ai_settings(self):
         env = os.environ.copy()
-        for name in ('PERP_TOKEN', 'PERP_MODEL', 'PERP_PROMPT', 'PERP_URL', 'CLAUDE_CODE_OAUTH_TOKEN'):
+        for name in ('PERP_TOKEN', 'PERP_MODEL', 'PERP_PROMPT', 'PERP_URL'):
             env.pop(name, None)
         env.update({
             'GIST_ID': 'test', 'GH_TOKEN': 'test-token', 'WEBHOOKS_PATH': '[]',
